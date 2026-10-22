@@ -181,11 +181,40 @@
     function getAuthRedirectTarget() {
       try {
         const params = new URLSearchParams(window.location.search);
-        let target = params.get('redirect') || params.get('return_to') || sessionStorage.getItem('hg_auth_redirect') || '';
+        let target = params.get('redirect') || params.get('return_to') || '';
+
+        // 1. Check cross-domain cookie if redirect not in query
+        if (!target) {
+          const cookieMatch = document.cookie.match(/(?:^|;\s*)hg_auth_redirect=([^;]+)/);
+          if (cookieMatch) {
+            target = decodeURIComponent(cookieMatch[1]);
+          }
+        }
+
+        // 2. Check sessionStorage
+        if (!target) {
+          target = sessionStorage.getItem('hg_auth_redirect') || '';
+        }
+
+        // 3. Check explicit source/from parameter
+        const source = params.get('source') || params.get('from') || '';
+        if (source === 'ai' || source === 'guruai' || source.includes('ai')) {
+          target = 'https://ai.webguruji.online/';
+        }
+
+        // 4. Check document.referrer (e.g. user came from ai.webguruji.online)
+        if (!target && document.referrer) {
+          if (document.referrer.includes('ai.webguruji.online') || document.referrer.includes('/ai')) {
+            target = 'https://ai.webguruji.online/';
+          }
+        }
+
         if (target) {
           try { target = decodeURIComponent(target); } catch(e){}
         }
-        if (!target || target === 'login.html' || target.includes('login.html') || target.includes('signup.html')) {
+
+        // Eliminate invalid self-references to login or signup
+        if (!target || target === 'login.html' || target.includes('/login.html') || target.includes('/signup.html')) {
           target = 'https://webguruji.online/dashboard.html';
         }
         return target;
@@ -196,10 +225,14 @@
 
     let redirectUrl = getAuthRedirectTarget();
 
-    // Persist redirect target in session for post-login redirect
+    // Persist redirect target in session and cross-domain cookie
     try {
-      if (redirectUrl && redirectUrl !== 'https://webguruji.online/dashboard.html' && redirectUrl !== 'dashboard.html') {
+      if (redirectUrl && !redirectUrl.includes('login.html')) {
         sessionStorage.setItem('hg_auth_redirect', redirectUrl);
+        const hostname = window.location.hostname;
+        let domainStr = (hostname === 'webguruji.online' || hostname.endsWith('.webguruji.online')) ? '; domain=.webguruji.online' : '';
+        const secureStr = window.location.protocol === 'https:' ? '; secure' : '';
+        document.cookie = `hg_auth_redirect=${encodeURIComponent(redirectUrl)}; path=/; max-age=3600${domainStr}; SameSite=Lax${secureStr}`;
       }
     } catch (e) {}
 
@@ -379,6 +412,7 @@
             }));
           }
 
+          redirectUrl = getAuthRedirectTarget();
           try {
             sessionStorage.removeItem('hg_auth_redirect');
             const hostname = window.location.hostname;

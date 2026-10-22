@@ -273,13 +273,41 @@ export async function signUp(email, password, name) {
  * Sign In with Supabase Google OAuth
  */
 export async function signInWithGoogle() {
-  let returnTarget = window.location.origin + '/dashboard.html';
+  let returnTarget = 'https://webguruji.online/dashboard.html';
   try {
     const params = new URLSearchParams(window.location.search);
-    const p = params.get('redirect') || sessionStorage.getItem('hg_auth_redirect');
+    let p = params.get('redirect') || params.get('return_to') || '';
+
+    // 1. Check cross-domain cookie
+    if (!p) {
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)hg_auth_redirect=([^;]+)/);
+      if (cookieMatch) p = decodeURIComponent(cookieMatch[1]);
+    }
+
+    // 2. Check sessionStorage
+    if (!p) {
+      p = sessionStorage.getItem('hg_auth_redirect') || '';
+    }
+
+    // 3. Check source param or referrer
+    const source = params.get('source') || params.get('from') || '';
+    if (source === 'ai' || source === 'guruai' || source.includes('ai')) {
+      p = 'https://ai.webguruji.online/';
+    } else if (!p && document.referrer && (document.referrer.includes('ai.webguruji.online') || document.referrer.includes('/ai'))) {
+      p = 'https://ai.webguruji.online/';
+    }
+
     if (p && !p.includes('login.html')) {
       returnTarget = p.startsWith('http') ? p : (window.location.origin + '/' + p);
     }
+
+    // Save to cross-subdomain cookie so destination knows
+    try {
+      const hostname = window.location.hostname;
+      let domainStr = (hostname === 'webguruji.online' || hostname.endsWith('.webguruji.online')) ? '; domain=.webguruji.online' : '';
+      const secureStr = window.location.protocol === 'https:' ? '; secure' : '';
+      document.cookie = `hg_auth_redirect=${encodeURIComponent(returnTarget)}; path=/; max-age=3600${domainStr}; SameSite=Lax${secureStr}`;
+    } catch(e) {}
   } catch(e) {}
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
