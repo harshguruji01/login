@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
+Allow: /harshguruji-login-preview.webp
+Allow: /*.webp$
+Disallow: /admin*
 
 Sitemap: https://login.webguruji.online/sitemap.xml
+Sitemap: https://webguruji.online/sitemap-images.xml
+
