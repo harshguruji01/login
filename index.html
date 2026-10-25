@@ -5,7 +5,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HarshGuruJi Login Tab - Official Login Page | HarshGuruJi Account Sign In</title>
+  <title>HarshGuruJi Authentication</title>
   <meta name="description" content="Official HarshGuruJi login-tab and login page. Sign in to your HarshGuruJi account to access developer tools, AI Hub, NCERT study books, online games, and software store.">
   <meta name="keywords" content="harshguruji login-tab login page, harshguruji login page, harshguruji login-tab, harshguruji login, harshguruji sign in, harshguruji login, harshguruji online login, harshguruji student portal login, access tools">
   <meta name="author" content="HarshGuruJi">
@@ -367,56 +367,34 @@
       
       try {
         if (loginMethod === 'email') {
-          // Send 6-digit Login Verification Code to user email from info@webguruji.online
           const email = (emailInput.value || '').trim();
           const password = passwordInput.value;
           if (!email || !password) throw new Error("Email and password required.");
 
-          const res = await sendLoginVerificationCode(email, password, 'main');
-          pendingEmail = email;
-          pendingPassword = password;
-          pendingEmailToken = res.token;
-          loginMethod = 'verify_email';
+          // Direct Supabase sign in with cross-subdomain SSO!
+          await signIn(email, password);
 
-          // Switch UI to Email OTP Verification mode
-          emailGroup.style.display = 'none';
-          passwordGroup.style.display = 'none';
-          otpGroup.style.display = 'block';
-          const otpLabel = otpGroup.querySelector('label');
-          if (otpLabel) {
-            otpLabel.innerHTML = 'Enter 6-digit code sent from <span style="color:#38bdf8;">info@webguruji.online</span> to ' + email;
+          redirectUrl = getAuthRedirectTarget();
+          const { data: { session } } = await supabase.auth.getSession();
+          try {
+            sessionStorage.removeItem('hg_auth_redirect');
+            const hostname = window.location.hostname;
+            let domainStr = (hostname === 'webguruji.online' || hostname.endsWith('.webguruji.online')) ? '; domain=.webguruji.online' : '';
+            document.cookie = `hg_auth_redirect=; path=/; max-age=0${domainStr}; SameSite=Lax`;
+          } catch(e){}
+          let finalTarget = redirectUrl;
+          if (session && session.access_token && session.refresh_token) {
+            const hashStr = `#access_token=${encodeURIComponent(session.access_token)}&refresh_token=${encodeURIComponent(session.refresh_token)}&token_type=bearer`;
+            finalTarget = finalTarget.split('#')[0] + hashStr;
           }
-          otpInput.value = '';
-          otpInput.focus();
-          loginBtn.querySelector('span').textContent = 'Verify Code & Log In';
-          toggleMethodBtn.textContent = '← Back to Email / Password';
-
-          errorDiv.style.color = '#10b981';
-          errorDiv.style.borderColor = '#10b981';
-          errorDiv.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
-          errorDiv.textContent = 'Verification code sent to ' + email + ' from info@webguruji.online! Please check your inbox or spam.';
-          errorDiv.style.display = 'block';
+          window.location.replace(finalTarget);
 
         } else if (loginMethod === 'verify_email') {
-          // Verify Email OTP and complete login
+          // Verify Email OTP and complete login (fallback if ever invoked)
           const otp = (otpInput.value || '').trim();
           if (!otp) throw new Error("Verification code is required.");
 
-          const verifyRes = await verifyLoginCode(pendingEmail, otp, pendingEmailToken, 'main');
           await signIn(pendingEmail, pendingPassword);
-
-          if (verifyRes.isNewUser) {
-            sessionStorage.setItem('hg_pending_greeting', JSON.stringify({
-              type: 'new',
-              name: verifyRes.displayName || 'User',
-              email: pendingEmail
-            }));
-          } else {
-            sessionStorage.setItem('hg_pending_greeting', JSON.stringify({
-              type: 'returning',
-              name: verifyRes.displayName || 'User'
-            }));
-          }
 
           redirectUrl = getAuthRedirectTarget();
           const { data: { session } } = await supabase.auth.getSession();
