@@ -534,8 +534,21 @@
             }
             successDiv.textContent = "Account created successfully! You are now logged in.";
             successDiv.classList.remove('hidden');
-            setTimeout(() => {
-              window.location.replace(getAuthRedirectTarget());
+            setTimeout(async () => {
+              redirectUrl = getAuthRedirectTarget();
+              const { data: { session } } = await supabase.auth.getSession();
+              try {
+                sessionStorage.removeItem('hg_auth_redirect');
+                const hostname = window.location.hostname;
+                let domainStr = (hostname === 'webguruji.online' || hostname.endsWith('.webguruji.online')) ? '; domain=.webguruji.online' : '';
+                document.cookie = 'hg_auth_redirect=; path=/; max-age=0' + domainStr + '; SameSite=Lax';
+              } catch(e){}
+              let finalTarget = redirectUrl;
+              if (session && session.access_token && session.refresh_token) {
+                const hashStr = '#access_token=' + encodeURIComponent(session.access_token) + '&refresh_token=' + encodeURIComponent(session.refresh_token) + '&token_type=bearer';
+                finalTarget = finalTarget.split('#')[0] + hashStr;
+              }
+              window.location.replace(finalTarget);
             }, 1200);
           }
 
